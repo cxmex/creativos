@@ -211,11 +211,11 @@ async def api_color_images(estilo_id: int):
         )
 
     result = {cf: val for cf, val in pairs}
-    # Add color-name aliases for numeric folders so frontend can match without color_id
+    # Add color-name aliases for numeric folders; skip if name key already exists (e.g. NEGRO has its own folder)
     for row in (colores_rows or []):
         num_key = str(row["id"])
         name_key = (row.get("color") or "").upper().strip().replace(" ", "_").replace("/", "_")
-        if num_key in result and name_key:
+        if num_key in result and name_key and name_key not in result:
             result[name_key] = result[num_key]
 
     cache_set(cache_key, result)
