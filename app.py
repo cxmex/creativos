@@ -317,6 +317,16 @@ async def upload_estilo_photo(estilo_id: int, file: UploadFile = File(...)):
     return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images_estilos/{path}"}
 
 
+@app.get("/api/debug/colores")
+async def debug_colores(ids: str = "1,4,5,17"):
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{SUPABASE_URL}/rest/v1/inventario_colores",
+            headers=HEADERS, params={"select": "id,color", "id": f"in.({ids})"}, timeout=10
+        )
+        return {"status": r.status_code, "ids": ids, "rows": r.json()}
+
+
 @app.get("/api/debug/bucket")
 async def debug_bucket(prefix: str = ""):
     """List raw bucket contents at any prefix — for debugging."""
