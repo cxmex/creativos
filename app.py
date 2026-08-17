@@ -1,7 +1,6 @@
 import os
 import asyncio
 from datetime import datetime, timedelta
-from collections import defaultdict
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -18,6 +17,22 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
+# Simple TTL cache
+_cache: dict = {}
+CACHE_TTL = 300  # seconds
+
+
+def cache_get(key):
+    if key in _cache:
+        data, ts = _cache[key]
+        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+            return data
+    return None
+
+
+def cache_set(key, data):
+    _cache[key] = (data, datetime.utcnow())
+
 
 async def sb(client, method, endpoint, params=None, json_data=None):
     url = f"{SUPABASE_URL}{endpoint}"
@@ -33,6 +48,10 @@ async def index(request: Request):
 
 @app.get("/api/thumbs")
 async def api_thumbs():
+    cached = cache_get("thumbs")
+    if cached is not None:
+        return cached
+
     async with httpx.AsyncClient() as client:
         rows = await sb(client, "POST", "/storage/v1/object/list/images_estilos",
                         json_data={"prefix": "", "limit": 5000, "offset": 0})
@@ -43,84 +62,55 @@ async def api_thumbs():
             estilo_id = name.split("/")[0]
             if estilo_id not in thumbs:
                 thumbs[estilo_id] = f"{SUPABASE_URL}/storage/v1/object/public/images_estilos/{name}"
+
+    cache_set("thumbs", thumbs)
     return thumbs
 
 
 @app.get("/api/estilos")
 async def api_estilos(sort: str = "nombre"):
-    async with httpx.AsyncClient() as client:
-        estilos, stock_rows = await asyncio.gather(
-            sb(client, "GET", "/rest/v1/inventario_estilos",
-               params={"select": "id,nombre,proveedor", "limit": "1000"}),
-            sb(client, "GET", "/rest/v1/inventario1",
-               params={"select": "estilo_id,color,terex1,terex2", "limit": "60000"}),
-        )
+    cached = cache_get("estilos")
+    if cached is None:
+        async with httpx.AsyncClient() as client:
+            result = await sb(client, "POST", "/rest/v1/rpc/get_creativos_estilos", json_data={})
+        cached = result or []
+        cache_set("estilos", cached)
 
-    agg = defaultdict(lambda: defaultdict(lambda: [0, 0]))
-    for r in (stock_rows or []):
-        eid = r.get("estilo_id")
-        if not eid:
-            continue
-        color = (r.get("color") or "SIN COLOR").strip().upper()
-        agg[eid][color][0] += r.get("terex1") or 0
-        agg[eid][color][1] += r.get("terex2") or 0
-
-    result = []
-    for e in (estilos or []):
-        eid = e["id"]
-        colors = [
-            {"color": c, "t1": v[0], "t2": v[1], "total": v[0] + v[1]}
-            for c, v in agg.get(eid, {}).items()
-        ]
-        colors.sort(key=lambda x: x["total"], reverse=True)
-        t1 = sum(c["t1"] for c in colors)
-        t2 = sum(c["t2"] for c in colors)
-        result.append({
-            "id": eid,
-            "nombre": e["nombre"],
-            "proveedor": e.get("proveedor") or "",
-            "colors": colors,
-            "t1": t1,
-            "t2": t2,
-            "total": t1 + t2,
-            "num_colors": len(colors),
-        })
+    rows = list(cached)
 
     if sort == "stock_total":
-        result.sort(key=lambda x: x["total"], reverse=True)
+        rows.sort(key=lambda x: x["total"], reverse=True)
     elif sort == "stock_t1":
-        result.sort(key=lambda x: x["t1"], reverse=True)
+        rows.sort(key=lambda x: x["t1"], reverse=True)
     elif sort == "stock_t2":
-        result.sort(key=lambda x: x["t2"], reverse=True)
+        rows.sort(key=lambda x: x["t2"], reverse=True)
     elif sort == "colores":
-        result.sort(key=lambda x: x["num_colors"], reverse=True)
+        rows.sort(key=lambda x: x["num_colors"], reverse=True)
     else:
-        result.sort(key=lambda x: x["nombre"])
+        rows.sort(key=lambda x: x["nombre"])
 
-    return result
+    return rows
 
 
 @app.get("/api/ventas-por-estilo")
 async def api_ventas_por_estilo(dias: int = 30):
-    cutoff = (datetime.utcnow() - timedelta(days=dias)).date().isoformat()
+    key = f"ventas_{dias}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
+
     async with httpx.AsyncClient() as client:
-        bc_map_rows, v1, v2 = await asyncio.gather(
-            sb(client, "GET", "/rest/v1/inventario1",
-               params={"select": "barcode,estilo_id", "limit": "60000"}),
-            sb(client, "GET", "/rest/v1/ventas_terex1",
-               params={"select": "barcode,qty", "fecha": f"gte.{cutoff}", "limit": "50000"}),
-            sb(client, "GET", "/rest/v1/ventas_terex2",
-               params={"select": "barcode,qty", "fecha": f"gte.{cutoff}", "limit": "50000"}),
-        )
+        result = await sb(client, "POST", "/rest/v1/rpc/get_ventas_por_estilo",
+                          json_data={"dias": dias})
+    data = result or {}
+    cache_set(key, data)
+    return data
 
-    bc_map = {r["barcode"]: r["estilo_id"] for r in (bc_map_rows or []) if r.get("barcode")}
-    ventas = defaultdict(int)
-    for r in ((v1 or []) + (v2 or [])):
-        eid = bc_map.get(r.get("barcode"))
-        if eid:
-            ventas[eid] += r.get("qty") or 1
 
-    return dict(ventas)
+@app.post("/api/cache/clear")
+async def clear_cache():
+    _cache.clear()
+    return {"ok": True}
 
 
 if __name__ == "__main__":
