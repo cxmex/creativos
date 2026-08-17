@@ -79,7 +79,7 @@ async def _build_estilos_from_rest():
     async with httpx.AsyncClient() as client:
         estilos, stock_rows = await asyncio.gather(
             sb(client, "GET", "/rest/v1/inventario_estilos",
-               params={"select": "id,nombre,proveedor", "limit": "1000"}),
+               params={"select": "id,nombre,supplier", "limit": "1000"}),
             _fetch_all_inventario1(client),
         )
 
@@ -105,7 +105,7 @@ async def _build_estilos_from_rest():
         result.append({
             "id": eid,
             "nombre": e["nombre"],
-            "proveedor": e.get("proveedor") or "",
+            "proveedor": e.get("supplier") or "",
             "colors": colors,
             "t1": t1,
             "t2": t2,
