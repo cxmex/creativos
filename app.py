@@ -1,5 +1,5 @@
 import os
-import re
+import time
 import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -227,13 +227,9 @@ async def api_ventas_por_estilo(dias: int = 30):
     return data
 
 
-def _safe_filename(name: str) -> str:
-    base, dot, ext = name.rpartition('.')
-    if not base:
-        base, dot, ext = name, '', ''
-    base = re.sub(r'[^a-zA-Z0-9._-]', '_', base)
-    base = re.sub(r'_+', '_', base).strip('_')
-    return f"{base}{dot}{ext}" if ext else base
+def _ts_filename(original: str) -> str:
+    ext = original.rsplit('.', 1)[-1].lower() if '.' in original else 'jpg'
+    return f"{int(time.time())}.{ext}"
 
 
 async def _storage_upload(bucket: str, path: str, content: bytes, content_type: str):
@@ -264,7 +260,7 @@ async def upload_color_photo(
         folder = str(color_id)
     else:
         folder = color_name.upper().strip().replace(" ", "_").replace("/", "_")
-    path = f"{estilo_id}/{folder}/{_safe_filename(file.filename)}"
+    path = f"{estilo_id}/{folder}/{_ts_filename(file.filename)}"
     r = await _storage_upload("images-colores", path, content, file.content_type or "image/jpeg")
     if r.status_code not in (200, 201):
         return {"error": r.text, "status": r.status_code}
@@ -275,7 +271,7 @@ async def upload_color_photo(
 @app.post("/api/upload/estilo/{estilo_id}")
 async def upload_estilo_photo(estilo_id: int, file: UploadFile = File(...)):
     content = await file.read()
-    path = f"{estilo_id}/{_safe_filename(file.filename)}"
+    path = f"{estilo_id}/{_ts_filename(file.filename)}"
     r = await _storage_upload("images_estilos", path, content, file.content_type or "image/jpeg")
     if r.status_code not in (200, 201):
         return {"error": r.text, "status": r.status_code}
