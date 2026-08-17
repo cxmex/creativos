@@ -353,14 +353,10 @@ function toggle(id) {
       const estilo = allEstilos.find(e => e.id === id);
       if (!estilo) return;
       estilo.colors.forEach(c => {
-        const sanitized = _sanitizeColorFolder(c.color);
-        const swKey = c.color_id || sanitized;
-        const info = (c.color_id && colorData[String(c.color_id)])
-          || colorData[sanitized]
-          || colorData[c.color.toUpperCase()]
-          || {};
+        const info = _findColorInfo(colorData, c.color_id, c.color);
         const url = (info.fotos || [])[0] || (info.creativos || [])[0];
         if (!url) return;
+        const swKey = c.color_id || _sanitizeColorFolder(c.color);
         const sw = document.getElementById(`sw-${id}-${swKey}`);
         if (sw) sw.outerHTML = `<img class="color-thumb" src="${url}" loading="lazy">`;
       });
@@ -370,6 +366,19 @@ function toggle(id) {
 
 function _sanitizeColorFolder(name) {
   return name.toUpperCase().trim().replace(/\s+/g,'_').replace(/\//g,'_');
+}
+
+function _findColorInfo(colorData, colorId, colorName) {
+  const sanitized = _sanitizeColorFolder(colorName);
+  const candidates = [
+    colorId != null ? colorData[String(colorId)] : null,
+    colorData[sanitized],
+    colorData[colorName.toUpperCase()],
+  ].filter(Boolean);
+  // Prefer a key that actually has media; fall back to first match
+  return candidates.find(d => (d.fotos||[]).length || (d.creativos||[]).length)
+    || candidates[0]
+    || {};
 }
 
 /* ---- Color gallery ---- */
@@ -387,11 +396,7 @@ async function openColorGallery(estiloId, colorId, colorName, estiloNombre) {
 
   try {
     const data = await fetch(`/api/color-images/${estiloId}`).then(r => r.json());
-    const sanitized = _sanitizeColorFolder(colorName);
-    const info = (colorId && data[String(colorId)])
-      || data[sanitized]
-      || data[colorName.toUpperCase()]
-      || {};
+    const info = _findColorInfo(data, colorId, colorName);
     const all = [...(info.fotos || []), ...(info.creativos || [])];
 
     document.getElementById('gal-loading').style.display = 'none';
