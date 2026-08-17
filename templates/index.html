@@ -48,6 +48,21 @@ body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif;
 .expand-icon { color: #555; font-size: .85rem; margin-left: 6px; transition: transform .2s; flex-shrink: 0; }
 .expanded .expand-icon { transform: rotate(180deg); color: #7C4DFF; }
 
+/* Color photo strip */
+.photo-strip { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; background: #0a0a1a; border-bottom: 1px solid #1a1a35; }
+.photo-strip::-webkit-scrollbar { height: 4px; }
+.photo-strip::-webkit-scrollbar-thumb { background: #2a3a5e; border-radius: 2px; }
+.photo-item { flex-shrink: 0; text-align: center; cursor: pointer; }
+.photo-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #2a3a5e; display: block; transition: transform .15s; }
+.photo-item img:hover { transform: scale(1.06); border-color: #7C4DFF; }
+.photo-strip-loading { padding: 14px 16px; color: #555; font-size: .75rem; background: #0a0a1a; border-bottom: 1px solid #1a1a35; }
+
+/* Lightbox */
+#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 3000; display: none; align-items: center; justify-content: center; }
+#lightbox.show { display: flex; }
+#lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 10px; object-fit: contain; }
+#lightbox-close { position: absolute; top: 16px; right: 20px; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
+
 /* Color tree */
 .color-tree { border-top: 1px solid #1a1a35; background: #0d1526; display: none; }
 .expanded .color-tree { display: block; }
@@ -285,6 +300,7 @@ function render(rows) {
         <div class="expand-icon">&#9660;</div>
       </div>
       <div class="color-tree">
+        <div class="photo-strip-loading" id="ps-${e.id}" style="display:none">Cargando fotos...</div>
         ${colorRows || '<div style="padding:12px 24px;color:#555;font-size:.78rem">Sin stock en sistema</div>'}
       </div>
     </div>`;
@@ -293,33 +309,45 @@ function render(rows) {
 
 const loadedColorImages = new Set();
 
+function openLightbox(url) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lb-img').src = url;
+  lb.classList.add('show');
+}
+
 function toggle(id) {
   const card = document.getElementById(`card-${id}`);
   const wasExpanded = card.classList.contains('expanded');
   card.classList.toggle('expanded');
 
-  // Load color images the first time this estilo is expanded
   if (!wasExpanded && !loadedColorImages.has(id)) {
     loadedColorImages.add(id);
+    const stripEl = document.getElementById(`ps-${id}`);
+    if (stripEl) stripEl.style.display = 'block';
+
     fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorMap => {
-      // colorMap: { "color_id_str": "url", ... }
-      // Find the estilo in allEstilos to match color_id
-      const estilo = allEstilos.find(e => e.id === id);
-      if (!estilo) return;
-      estilo.colors.forEach(c => {
-        if (!c.color_id) return;
-        const url = colorMap[String(c.color_id)];
-        if (!url) return;
-        const phId = `cph-${id}-${c.color_id}`;
-        const ph = document.getElementById(phId);
-        if (!ph) return;
-        ph.innerHTML = `<img class="color-photo" src="${url}" alt="${c.color}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=color-swatch style=background:${swatchColor(c.color).replace(/'/g,'"')}></div>'">`;
-      });
-    }).catch(() => {});
+      const urls = Object.values(colorMap);
+      if (!stripEl) return;
+      if (urls.length === 0) {
+        stripEl.style.display = 'none';
+        return;
+      }
+      const photos = urls.map(url =>
+        `<div class="photo-item" onclick="openLightbox('${url}')">
+          <img src="${url}" loading="lazy" onerror="this.parentElement.style.display='none'">
+        </div>`
+      ).join('');
+      stripEl.outerHTML = `<div class="photo-strip" id="ps-${id}">${photos}</div>`;
+    }).catch(() => { if (stripEl) stripEl.style.display = 'none'; });
   }
 }
 
 load();
 </script>
+
+<div id="lightbox" onclick="this.classList.remove('show')">
+  <span id="lightbox-close" onclick="document.getElementById('lightbox').classList.remove('show')">&times;</span>
+  <img id="lb-img" src="" alt="">
+</div>
 </body>
 </html>
