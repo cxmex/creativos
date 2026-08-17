@@ -93,23 +93,25 @@ body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif;
 /* Color tree */
 .color-tree { border-top: 1px solid #1a1a35; background: #0d1526; display: none; }
 .expanded .color-tree { display: block; }
-.color-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #12121f; transition: background .1s; }
+.color-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #12121f; cursor: pointer; transition: background .1s; }
 .color-row:last-child { border-bottom: none; }
-.color-row:hover { background: #16213E44; }
-/* Per-color photo cell */
-.color-photo-wrap { position: relative; flex-shrink: 0; width: 52px; height: 52px; }
-.color-photo-ph { width: 52px; height: 52px; border-radius: 6px; background: #1a1a35; border: 1px solid #1e2a4a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.color-photo-ph img { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; border: 1px solid #2a3a5e; display: block; cursor: pointer; }
-.color-swatch { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.1); }
-.color-upload-btn { position: absolute; bottom: -4px; right: -4px; width: 18px; height: 18px; background: #7C4DFF; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border: 2px solid #0d1526; opacity: 0; transition: opacity .15s; z-index: 1; }
-.color-row:hover .color-upload-btn { opacity: 1; }
-.color-name { flex: 1; font-size: .78rem; color: #ccc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.color-row:hover { background: #16213E66; }
+.color-swatch { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.12); }
 .color-name { flex: 1; font-size: .78rem; color: #ccc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .color-stocks { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
 .color-stock-item { text-align: right; min-width: 34px; }
 .color-stock-val { font-size: .85rem; font-weight: 700; }
 .color-stock-lbl { font-size: .58rem; color: #555; text-transform: uppercase; }
 .color-bar-wrap { width: 60px; height: 4px; background: #1a1a35; border-radius: 2px; overflow: hidden; }
+.color-arrow { color: #333; font-size: 1rem; flex-shrink: 0; }
+
+/* Gallery modal */
+.gal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 52vh; overflow-y: auto; margin-bottom: 4px; }
+.gal-item { aspect-ratio: 1; border-radius: 8px; overflow: hidden; cursor: pointer; background: #0d1526; position: relative; }
+.gal-item img, .gal-item video { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .15s; }
+.gal-item:hover img, .gal-item:hover video { transform: scale(1.04); }
+.gal-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; }
+.gal-empty { text-align: center; padding: 28px; color: #555; font-size: .82rem; }
 .color-bar { height: 100%; border-radius: 2px; background: #7C4DFF; }
 
 /* Rank badge */
@@ -284,34 +286,18 @@ function render(rows) {
       const barPct = e.total > 0 ? Math.round((c.total / e.total) * 100) : 0;
       const swatch = swatchColor(c.color);
       const cid = c.color_id;
-      const photoId = `cph-${e.id}-${cid || c.color.replace(/\s+/g,'-')}`;
       const colorLabel = c.color.replace(/'/g, "\\'");
-      const uploadClick = cid
-        ? `openUpload(event,${e.id},${cid},'${colorLabel}','${e.nombre.replace(/'/g,"\\'")}')`
-        : `openUpload(event,${e.id},null,'${colorLabel}','${e.nombre.replace(/'/g,"\\'")}')`;
-      return `<div class="color-row">
-        <div class="color-photo-wrap">
-          <div class="color-photo-ph" id="${photoId}" onclick="${uploadClick}">
-            <div class="color-swatch" style="background:${swatch}"></div>
-          </div>
-          <div class="color-upload-btn" onclick="${uploadClick}">+</div>
-        </div>
+      const estiloLabel = e.nombre.replace(/'/g, "\\'");
+      return `<div class="color-row" onclick="openColorGallery(${e.id},${cid||'null'},'${colorLabel}','${estiloLabel}')">
+        <div class="color-swatch" style="background:${swatch}"></div>
         <div class="color-name">${c.color}</div>
         <div class="color-bar-wrap"><div class="color-bar" style="width:${barPct}%"></div></div>
         <div class="color-stocks">
-          <div class="color-stock-item">
-            <div class="color-stock-val" style="color:#00C853">${c.t1}</div>
-            <div class="color-stock-lbl">T1</div>
-          </div>
-          <div class="color-stock-item">
-            <div class="color-stock-val" style="color:#7C4DFF">${c.t2}</div>
-            <div class="color-stock-lbl">T2</div>
-          </div>
-          <div class="color-stock-item">
-            <div class="color-stock-val" style="color:#fff">${c.total}</div>
-            <div class="color-stock-lbl">Total</div>
-          </div>
+          <div class="color-stock-item"><div class="color-stock-val" style="color:#00C853">${c.t1}</div><div class="color-stock-lbl">T1</div></div>
+          <div class="color-stock-item"><div class="color-stock-val" style="color:#7C4DFF">${c.t2}</div><div class="color-stock-lbl">T2</div></div>
+          <div class="color-stock-item"><div class="color-stock-val" style="color:#fff">${c.total}</div><div class="color-stock-lbl">Total</div></div>
         </div>
+        <div class="color-arrow">›</div>
       </div>`;
     }).join('');
 
@@ -348,8 +334,6 @@ function render(rows) {
   }).join('');
 }
 
-const loadedColorImages = new Set();
-
 function openLightbox(url) {
   document.getElementById('lb-img').src = url;
   document.getElementById('lightbox').classList.add('show');
@@ -357,51 +341,63 @@ function openLightbox(url) {
 
 function toggle(id) {
   const card = document.getElementById(`card-${id}`);
-  const wasExpanded = card.classList.contains('expanded');
   card.classList.toggle('expanded');
+}
 
-  if (!wasExpanded && !loadedColorImages.has(id)) {
-    loadedColorImages.add(id);
-    fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorData => {
-      // colorData: { "folder_name": { fotos: [...], creativos: [...] } }
-      const estilo = allEstilos.find(e => e.id === id);
-      if (!estilo) return;
+function _sanitizeColorFolder(name) {
+  return name.toUpperCase().trim().replace(/\s+/g,'_').replace(/\//g,'_');
+}
 
-      // 1. Inject first foto inline into each color row placeholder
-      estilo.colors.forEach(c => {
-        const sanitized = _sanitizeColorFolder(c.color);
-        const info = (c.color_id && colorData[String(c.color_id)])
-          || colorData[sanitized]
-          || colorData[c.color.toUpperCase()]
-          || {};
-        const fotos = info.fotos || [];
-        if (!fotos.length) return;
-        const phId = c.color_id
-          ? `cph-${id}-${c.color_id}`
-          : `cph-${id}-${c.color.replace(/\s+/g,'-')}`;
-        const ph = document.getElementById(phId);
-        if (!ph) return;
-        const url = fotos[0];
-        ph.innerHTML = `<img src="${url}" alt="${c.color}" loading="lazy" onclick="event.stopPropagation();openLightbox('${url}')" onerror="this.style.display='none'">`;
-      });
+/* ---- Color gallery ---- */
+let _galleryCtx = null;
 
-      // 2. Show all creativos as a strip at the top of the color tree
-      const allCreativos = Object.values(colorData).flatMap(d => d.creativos || []);
-      if (allCreativos.length) {
-        const tree = document.querySelector(`#card-${id} .color-tree`);
-        if (tree && !tree.querySelector('.creativos-strip')) {
-          const strip = document.createElement('div');
-          strip.className = 'creativos-strip';
-          strip.innerHTML = '<div class="creativos-label">Creativos</div><div class="creativos-photos">'
-            + allCreativos.map(url =>
-                `<div class="creativo-item" onclick="openLightbox('${url}')"><img src="${url}" loading="lazy"></div>`
-              ).join('')
-            + '</div>';
-          tree.insertBefore(strip, tree.firstChild);
-        }
-      }
-    }).catch(() => {});
+async function openColorGallery(estiloId, colorId, colorName, estiloNombre) {
+  _galleryCtx = { estiloId, colorId, colorName, estiloNombre };
+  document.getElementById('gal-title').textContent = colorName;
+  document.getElementById('gal-sub').textContent = estiloNombre;
+  document.getElementById('gal-loading').style.display = 'block';
+  document.getElementById('gal-grid').innerHTML = '';
+  document.getElementById('gal-grid').style.display = 'none';
+  document.getElementById('gal-empty').style.display = 'none';
+  document.getElementById('gallery-modal').style.display = 'flex';
+
+  try {
+    const data = await fetch(`/api/color-images/${estiloId}`).then(r => r.json());
+    const sanitized = _sanitizeColorFolder(colorName);
+    const info = (colorId && data[String(colorId)])
+      || data[sanitized]
+      || data[colorName.toUpperCase()]
+      || {};
+    const all = [...(info.fotos || []), ...(info.creativos || [])];
+
+    document.getElementById('gal-loading').style.display = 'none';
+    if (!all.length) {
+      document.getElementById('gal-empty').style.display = 'block';
+      return;
+    }
+    const grid = document.getElementById('gal-grid');
+    grid.innerHTML = all.map(url => {
+      const isVid = /\.(mp4|mov|webm|avi)(\?|$)/i.test(url);
+      return isVid
+        ? `<div class="gal-item" onclick="openLightbox('${url}')"><video src="${url}" muted playsinline></video><div class="gal-play">▶</div></div>`
+        : `<div class="gal-item" onclick="openLightbox('${url}')"><img src="${url}" loading="lazy"></div>`;
+    }).join('');
+    grid.style.display = 'grid';
+  } catch(e) {
+    document.getElementById('gal-loading').style.display = 'none';
+    document.getElementById('gal-empty').style.display = 'block';
   }
+}
+
+function closeGallery(evt) {
+  if (evt && evt.target !== document.getElementById('gallery-modal')) return;
+  document.getElementById('gallery-modal').style.display = 'none';
+}
+
+function openGalleryUpload() {
+  const { estiloId, colorId, colorName, estiloNombre } = _galleryCtx;
+  document.getElementById('gallery-modal').style.display = 'none';
+  _openUploadModal(estiloId, colorId, colorName, estiloNombre, false);
 }
 
 /* ---- Upload ---- */
@@ -414,40 +410,22 @@ function setTipo(t) {
   document.getElementById('tipo-btn-creativo').classList.toggle('active', t === 'creativo');
 }
 
-function _sanitizeColorFolder(name) {
-  return name.toUpperCase().trim().replace(/\s+/g,'_').replace(/\//g,'_');
-}
-
-function openUpload(evt, estiloId, colorId, colorName, estiloNombre) {
-  evt.stopPropagation();
-  const photoId = colorId
-    ? `cph-${estiloId}-${colorId}`
-    : `cph-${estiloId}-${colorName.replace(/\s+/g,'-')}`;
-  _uploadCtx = { estiloId, colorId, colorName, estiloNombre, photoId, isEstilo: false };
-  document.getElementById('modal-title').textContent = 'Subir foto de color';
-  document.getElementById('modal-sub').textContent = `${estiloNombre} · ${colorName}`;
+function _openUploadModal(estiloId, colorId, colorName, estiloNombre, isEstilo) {
+  _uploadCtx = { estiloId, colorId, colorName, estiloNombre, isEstilo };
+  document.getElementById('modal-title').textContent = isEstilo ? 'Subir foto de estilo' : 'Agregar foto / creativo';
+  document.getElementById('modal-sub').textContent = isEstilo ? estiloNombre : `${estiloNombre} · ${colorName}`;
   document.getElementById('upload-input').disabled = false;
   document.getElementById('do-upload-btn').disabled = false;
   document.getElementById('upload-preview').innerHTML = '';
   document.getElementById('upload-status').textContent = '';
   document.getElementById('upload-filename').textContent = '';
   setTipo('foto');
-  document.getElementById('tipo-row').style.display = 'flex';
+  document.getElementById('tipo-row').style.display = isEstilo ? 'none' : 'flex';
   document.getElementById('upload-modal').style.display = 'flex';
 }
 
 function openEstiloUpload(estiloId, estiloNombre) {
-  _uploadCtx = { estiloId, colorId: null, estiloNombre, isEstilo: true };
-  document.getElementById('modal-title').textContent = `Subir foto de estilo`;
-  document.getElementById('modal-sub').textContent = estiloNombre;
-  document.getElementById('upload-input').disabled = false;
-  document.getElementById('do-upload-btn').disabled = false;
-  document.getElementById('upload-preview').innerHTML = '';
-  document.getElementById('upload-status').textContent = '';
-  document.getElementById('upload-filename').textContent = '';
-  setTipo('foto');
-  document.getElementById('tipo-row').style.display = 'none'; // estilo upload has no tipo choice
-  document.getElementById('upload-modal').style.display = 'flex';
+  _openUploadModal(estiloId, null, null, estiloNombre, true);
 }
 
 function closeUpload(evt) {
@@ -484,7 +462,7 @@ async function doUpload() {
   const fd = new FormData();
   fd.append('file', inp.files[0]);
 
-  const { estiloId, colorId, colorName, photoId, isEstilo } = _uploadCtx;
+  const { estiloId, colorId, colorName, isEstilo } = _uploadCtx;
   let endpoint;
   if (isEstilo) {
     endpoint = `/api/upload/estilo/${estiloId}`;
@@ -501,38 +479,18 @@ async function doUpload() {
     if (data.ok) {
       statusEl.className = 'upload-status ok';
       statusEl.textContent = 'Subido correctamente';
-      if (!isEstilo && data.url) {
-        if (_uploadTipo === 'creativo') {
-          // Append to creativos strip if already rendered
-          let strip = document.querySelector(`#card-${estiloId} .creativos-photos`);
-          if (!strip) {
-            // Create the strip
-            const tree = document.querySelector(`#card-${estiloId} .color-tree`);
-            if (tree) {
-              const s = document.createElement('div');
-              s.className = 'creativos-strip';
-              s.innerHTML = '<div class="creativos-label">Creativos</div><div class="creativos-photos"></div>';
-              tree.insertBefore(s, tree.firstChild);
-              strip = s.querySelector('.creativos-photos');
-            }
-          }
-          if (strip) {
-            const item = document.createElement('div');
-            item.className = 'creativo-item';
-            item.onclick = () => openLightbox(data.url);
-            item.innerHTML = `<img src="${data.url}" loading="lazy">`;
-            strip.appendChild(item);
-          }
-        } else if (photoId) {
-          const ph = document.getElementById(photoId);
-          if (ph) ph.innerHTML = `<img src="${data.url}" loading="lazy" onclick="event.stopPropagation();openLightbox('${data.url}')" style="width:52px;height:52px;border-radius:6px;object-fit:cover;display:block;cursor:pointer">`;
-        }
-      } else if (isEstilo && data.url) {
-        // Refresh estilo thumb
-        const thumbEl = document.querySelector(`#card-${estiloId} .estilo-thumb`);
-        if (thumbEl) { thumbEl.src = data.url + '?t=' + Date.now(); thumbEl.style.display = ''; }
+      // Add the new file to the open gallery grid immediately
+      const grid = document.getElementById('gal-grid');
+      if (data.url && grid) {
+        const item = document.createElement('div');
+        item.className = 'gal-item';
+        item.onclick = () => openLightbox(data.url);
+        item.innerHTML = `<img src="${data.url}" loading="lazy">`;
+        grid.appendChild(item);
+        grid.style.display = 'grid';
+        document.getElementById('gal-empty').style.display = 'none';
       }
-      setTimeout(() => { document.getElementById('upload-modal').style.display = 'none'; }, 1200);
+      setTimeout(() => { document.getElementById('upload-modal').style.display = 'none'; }, 900);
     } else {
       statusEl.className = 'upload-status err';
       statusEl.textContent = data.error || 'Error al subir';
@@ -551,6 +509,20 @@ load();
 <div id="lightbox" onclick="this.classList.remove('show')">
   <span id="lightbox-close" onclick="document.getElementById('lightbox').classList.remove('show')">&times;</span>
   <img id="lb-img" src="" alt="">
+</div>
+
+<div id="gallery-modal" class="modal-overlay" style="display:none" onclick="closeGallery(event)">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-title" id="gal-title"></div>
+    <div class="modal-sub" id="gal-sub" style="margin-bottom:14px"></div>
+    <div id="gal-loading" style="text-align:center;padding:30px;color:#555;font-size:.82rem">Cargando...</div>
+    <div id="gal-grid" class="gal-grid" style="display:none"></div>
+    <div id="gal-empty" class="gal-empty" style="display:none">Sin fotos todavía</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-upload" onclick="openGalleryUpload()">+ Agregar</button>
+      <button class="btn-cancel" onclick="document.getElementById('gallery-modal').style.display='none'">Cerrar</button>
+    </div>
+  </div>
 </div>
 
 <div id="upload-modal" class="modal-overlay" style="display:none" onclick="closeUpload(event)">
