@@ -54,11 +54,24 @@ body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif;
 #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 10px; object-fit: contain; }
 #lightbox-close { position: absolute; top: 16px; right: 20px; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
 
+/* Creativos strip (inside expanded color tree) */
+.creativos-strip { background: #0a0a1a; border-bottom: 1px solid #2a3a5e; padding: 10px 16px 12px; }
+.creativos-label { font-size: .6rem; color: #7C4DFF; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.creativos-photos { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.creativos-photos::-webkit-scrollbar { height: 3px; }
+.creativos-photos::-webkit-scrollbar-thumb { background: #7C4DFF55; border-radius: 2px; }
+.creativo-item { flex-shrink: 0; cursor: pointer; position: relative; }
+.creativo-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #7C4DFF66; display: block; transition: transform .15s; }
+.creativo-item img:hover { transform: scale(1.05); border-color: #7C4DFF; }
+
 /* Upload modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .modal-box { background: #16213E; border: 1px solid #2a3a5e; border-radius: 14px; padding: 24px; max-width: 360px; width: 100%; }
 .modal-title { font-size: .95rem; font-weight: 800; margin-bottom: 4px; }
-.modal-sub { font-size: .75rem; color: #7C4DFF; margin-bottom: 16px; }
+.modal-sub { font-size: .75rem; color: #7C4DFF; margin-bottom: 12px; }
+.tipo-row { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid #2a3a5e; margin-bottom: 14px; }
+.tipo-btn { flex: 1; background: #0d1526; color: #555; border: none; padding: 8px; font-size: .8rem; font-weight: 700; cursor: pointer; transition: .12s; }
+.tipo-btn.active { background: #7C4DFF; color: #fff; }
 .file-drop { border: 2px dashed #2a3a5e; border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; transition: border-color .15s; margin-bottom: 12px; }
 .file-drop:hover, .file-drop.drag-over { border-color: #7C4DFF; }
 .file-drop input { display: none; }
@@ -349,30 +362,57 @@ function toggle(id) {
 
   if (!wasExpanded && !loadedColorImages.has(id)) {
     loadedColorImages.add(id);
-    fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorMap => {
-      // colorMap: { "folder_name": "url" } — folder_name is color_id string OR sanitized color name
+    fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorData => {
+      // colorData: { "folder_name": { fotos: [...], creativos: [...] } }
       const estilo = allEstilos.find(e => e.id === id);
       if (!estilo) return;
+
+      // 1. Inject first foto inline into each color row placeholder
       estilo.colors.forEach(c => {
-        // Try color_id match first, then sanitized color name
         const sanitized = _sanitizeColorFolder(c.color);
-        const url = (c.color_id && colorMap[String(c.color_id)])
-          || colorMap[sanitized]
-          || colorMap[c.color.toUpperCase()];
-        if (!url) return;
+        const info = (c.color_id && colorData[String(c.color_id)])
+          || colorData[sanitized]
+          || colorData[c.color.toUpperCase()]
+          || {};
+        const fotos = info.fotos || [];
+        if (!fotos.length) return;
         const phId = c.color_id
           ? `cph-${id}-${c.color_id}`
           : `cph-${id}-${c.color.replace(/\s+/g,'-')}`;
         const ph = document.getElementById(phId);
         if (!ph) return;
-        ph.innerHTML = `<img src="${url}" alt="${c.color}" loading="lazy" onclick="event.stopPropagation();openLightbox('${url}')" onerror="this.parentElement.innerHTML='<div class=color-swatch style=background:${swatchColor(c.color).replace(/'/g,'"')}></div>'">`;
+        const url = fotos[0];
+        ph.innerHTML = `<img src="${url}" alt="${c.color}" loading="lazy" onclick="event.stopPropagation();openLightbox('${url}')" onerror="this.style.display='none'">`;
       });
+
+      // 2. Show all creativos as a strip at the top of the color tree
+      const allCreativos = Object.values(colorData).flatMap(d => d.creativos || []);
+      if (allCreativos.length) {
+        const tree = document.querySelector(`#card-${id} .color-tree`);
+        if (tree && !tree.querySelector('.creativos-strip')) {
+          const strip = document.createElement('div');
+          strip.className = 'creativos-strip';
+          strip.innerHTML = '<div class="creativos-label">Creativos</div><div class="creativos-photos">'
+            + allCreativos.map(url =>
+                `<div class="creativo-item" onclick="openLightbox('${url}')"><img src="${url}" loading="lazy"></div>`
+              ).join('')
+            + '</div>';
+          tree.insertBefore(strip, tree.firstChild);
+        }
+      }
     }).catch(() => {});
   }
 }
 
 /* ---- Upload ---- */
 let _uploadCtx = null;
+let _uploadTipo = 'foto';
+
+function setTipo(t) {
+  _uploadTipo = t;
+  document.getElementById('tipo-btn-foto').classList.toggle('active', t === 'foto');
+  document.getElementById('tipo-btn-creativo').classList.toggle('active', t === 'creativo');
+}
 
 function _sanitizeColorFolder(name) {
   return name.toUpperCase().trim().replace(/\s+/g,'_').replace(/\//g,'_');
@@ -391,6 +431,8 @@ function openUpload(evt, estiloId, colorId, colorName, estiloNombre) {
   document.getElementById('upload-preview').innerHTML = '';
   document.getElementById('upload-status').textContent = '';
   document.getElementById('upload-filename').textContent = '';
+  setTipo('foto');
+  document.getElementById('tipo-row').style.display = 'flex';
   document.getElementById('upload-modal').style.display = 'flex';
 }
 
@@ -403,6 +445,8 @@ function openEstiloUpload(estiloId, estiloNombre) {
   document.getElementById('upload-preview').innerHTML = '';
   document.getElementById('upload-status').textContent = '';
   document.getElementById('upload-filename').textContent = '';
+  setTipo('foto');
+  document.getElementById('tipo-row').style.display = 'none'; // estilo upload has no tipo choice
   document.getElementById('upload-modal').style.display = 'flex';
 }
 
@@ -447,6 +491,7 @@ async function doUpload() {
   } else {
     fd.append('color_name', colorName);
     if (colorId) fd.append('color_id', colorId);
+    fd.append('tipo', _uploadTipo);
     endpoint = `/api/upload/color/${estiloId}`;
   }
 
@@ -456,9 +501,32 @@ async function doUpload() {
     if (data.ok) {
       statusEl.className = 'upload-status ok';
       statusEl.textContent = 'Subido correctamente';
-      if (photoId && data.url) {
-        const ph = document.getElementById(photoId);
-        if (ph) ph.innerHTML = `<img src="${data.url}?t=${Date.now()}" loading="lazy" onclick="event.stopPropagation();openLightbox('${data.url}')" style="width:52px;height:52px;border-radius:6px;object-fit:cover;display:block;cursor:pointer">`;
+      if (!isEstilo && data.url) {
+        if (_uploadTipo === 'creativo') {
+          // Append to creativos strip if already rendered
+          let strip = document.querySelector(`#card-${estiloId} .creativos-photos`);
+          if (!strip) {
+            // Create the strip
+            const tree = document.querySelector(`#card-${estiloId} .color-tree`);
+            if (tree) {
+              const s = document.createElement('div');
+              s.className = 'creativos-strip';
+              s.innerHTML = '<div class="creativos-label">Creativos</div><div class="creativos-photos"></div>';
+              tree.insertBefore(s, tree.firstChild);
+              strip = s.querySelector('.creativos-photos');
+            }
+          }
+          if (strip) {
+            const item = document.createElement('div');
+            item.className = 'creativo-item';
+            item.onclick = () => openLightbox(data.url);
+            item.innerHTML = `<img src="${data.url}" loading="lazy">`;
+            strip.appendChild(item);
+          }
+        } else if (photoId) {
+          const ph = document.getElementById(photoId);
+          if (ph) ph.innerHTML = `<img src="${data.url}" loading="lazy" onclick="event.stopPropagation();openLightbox('${data.url}')" style="width:52px;height:52px;border-radius:6px;object-fit:cover;display:block;cursor:pointer">`;
+        }
       } else if (isEstilo && data.url) {
         // Refresh estilo thumb
         const thumbEl = document.querySelector(`#card-${estiloId} .estilo-thumb`);
@@ -487,9 +555,13 @@ load();
 
 <div id="upload-modal" class="modal-overlay" style="display:none" onclick="closeUpload(event)">
   <div class="modal-box">
-    <div class="modal-title" id="modal-title">Subir foto</div>
+    <div class="modal-title" id="modal-title">Subir archivo</div>
     <div class="modal-sub" id="modal-sub"></div>
-    <div class="file-drop" onclick="document.getElementById('upload-input').click()" id="file-drop-zone">
+    <div class="tipo-row" id="tipo-row">
+      <button class="tipo-btn active" id="tipo-btn-foto" onclick="setTipo('foto')">Foto del color</button>
+      <button class="tipo-btn" id="tipo-btn-creativo" onclick="setTipo('creativo')">Creativo</button>
+    </div>
+    <div class="file-drop" onclick="document.getElementById('upload-input').click()">
       <input type="file" id="upload-input" accept="image/*,video/*">
       <div class="file-drop-label">Toca para seleccionar foto o video</div>
       <div class="file-drop-name" id="upload-filename"></div>

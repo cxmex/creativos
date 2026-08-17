@@ -55,6 +55,22 @@ async def _list_bucket_folder(client, bucket, prefix):
     return None
 
 
+async def _list_all_files(client, bucket, prefix):
+    r = await client.post(
+        f"{SUPABASE_URL}/storage/v1/object/list/{bucket}",
+        headers=HEADERS, json={"prefix": prefix, "limit": 200}, timeout=10
+    )
+    if r.status_code != 200:
+        return []
+    items = r.json()
+    if not isinstance(items, list):
+        return []
+    return [
+        f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{prefix}{item['name']}"
+        for item in items if item.get("id")
+    ]
+
+
 async def _fetch_all_inventario1(client):
     """Concurrent pagination through all inventario1 rows."""
     count_resp = await client.get(
@@ -157,14 +173,13 @@ async def api_thumbs():
 
 @app.get("/api/color-images/{estilo_id}")
 async def api_color_images(estilo_id: int):
-    """Returns {color_id: url} for all color photos of an estilo."""
+    """Returns {color_folder: {fotos: [urls], creativos: [urls]}} for all media of an estilo."""
     cache_key = f"colores_{estilo_id}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
 
     async with httpx.AsyncClient() as client:
-        # List color_id sub-folders for this estilo
         r = await client.post(
             f"{SUPABASE_URL}/storage/v1/object/list/images-colores",
             headers=HEADERS,
@@ -172,13 +187,16 @@ async def api_color_images(estilo_id: int):
         )
         color_folders = [x["name"] for x in (r.json() if r.status_code == 200 else []) if x.get("name")]
 
-        # Get first file from each color folder concurrently
-        urls = await asyncio.gather(*[
-            _list_bucket_folder(client, "images-colores", f"{estilo_id}/{cf}/")
-            for cf in color_folders
-        ])
+        async def fetch_color(cf):
+            creativos, fotos = await asyncio.gather(
+                _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/creativos/"),
+                _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/fotos/"),
+            )
+            return cf, {"creativos": creativos, "fotos": fotos}
 
-    result = {cf: url for cf, url in zip(color_folders, urls) if url}
+        pairs = await asyncio.gather(*[fetch_color(cf) for cf in color_folders])
+
+    result = {cf: val for cf, val in pairs}
     cache_set(cache_key, result)
     return result
 
@@ -252,20 +270,19 @@ async def upload_color_photo(
     estilo_id: int,
     color_name: str = Form(...),
     color_id: int = Form(None),
+    tipo: str = Form("foto"),          # "foto" or "creativo"
     file: UploadFile = File(...),
 ):
     content = await file.read()
-    # Prefer numeric color_id as folder; fall back to sanitized color name
-    if color_id:
-        folder = str(color_id)
-    else:
-        folder = color_name.upper().strip().replace(" ", "_").replace("/", "_")
-    path = f"{estilo_id}/{folder}/{_ts_filename(file.filename)}"
+    folder = str(color_id) if color_id else color_name.upper().strip().replace(" ", "_").replace("/", "_")
+    tipo_dir = "creativos" if tipo == "creativo" else "fotos"
+    path = f"{estilo_id}/{folder}/{tipo_dir}/{_ts_filename(file.filename)}"
     r = await _storage_upload("images-colores", path, content, file.content_type or "image/jpeg")
     if r.status_code not in (200, 201):
         return {"error": r.text, "status": r.status_code}
     _cache.pop(f"colores_{estilo_id}", None)
-    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images-colores/{path}", "folder": folder}
+    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images-colores/{path}",
+            "folder": folder, "tipo": tipo_dir}
 
 
 @app.post("/api/upload/estilo/{estilo_id}")
