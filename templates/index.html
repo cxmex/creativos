@@ -96,7 +96,8 @@ body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif;
 .color-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #12121f; cursor: pointer; transition: background .1s; }
 .color-row:last-child { border-bottom: none; }
 .color-row:hover { background: #16213E66; }
-.color-swatch { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.12); }
+.color-swatch { width: 36px; height: 36px; border-radius: 6px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.12); }
+.color-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid #2a3a5e; display: block; }
 .color-name { flex: 1; font-size: .78rem; color: #ccc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .color-stocks { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
 .color-stock-item { text-align: right; min-width: 34px; }
@@ -288,8 +289,9 @@ function render(rows) {
       const cid = c.color_id;
       const colorLabel = c.color.replace(/'/g, "\\'");
       const estiloLabel = e.nombre.replace(/'/g, "\\'");
+      const swKey = cid || _sanitizeColorFolder(c.color);
       return `<div class="color-row" onclick="openColorGallery(${e.id},${cid||'null'},'${colorLabel}','${estiloLabel}')">
-        <div class="color-swatch" style="background:${swatch}"></div>
+        <div class="color-swatch" id="sw-${e.id}-${swKey}" style="background:${swatch}"></div>
         <div class="color-name">${c.color}</div>
         <div class="color-bar-wrap"><div class="color-bar" style="width:${barPct}%"></div></div>
         <div class="color-stocks">
@@ -339,9 +341,31 @@ function openLightbox(url) {
   document.getElementById('lightbox').classList.add('show');
 }
 
+const _thumbLoaded = new Set();
+
 function toggle(id) {
   const card = document.getElementById(`card-${id}`);
   card.classList.toggle('expanded');
+
+  if (card.classList.contains('expanded') && !_thumbLoaded.has(id)) {
+    _thumbLoaded.add(id);
+    fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorData => {
+      const estilo = allEstilos.find(e => e.id === id);
+      if (!estilo) return;
+      estilo.colors.forEach(c => {
+        const sanitized = _sanitizeColorFolder(c.color);
+        const swKey = c.color_id || sanitized;
+        const info = (c.color_id && colorData[String(c.color_id)])
+          || colorData[sanitized]
+          || colorData[c.color.toUpperCase()]
+          || {};
+        const url = (info.fotos || [])[0] || (info.creativos || [])[0];
+        if (!url) return;
+        const sw = document.getElementById(`sw-${id}-${swKey}`);
+        if (sw) sw.outerHTML = `<img class="color-thumb" src="${url}" loading="lazy">`;
+      });
+    }).catch(() => {});
+  }
 }
 
 function _sanitizeColorFolder(name) {
