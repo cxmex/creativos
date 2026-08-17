@@ -197,9 +197,27 @@ async def api_color_images(estilo_id: int):
             all_fotos = fotos + [u for u in direct if u not in fotos]
             return cf, {"creativos": creativos, "fotos": all_fotos}
 
-        pairs = await asyncio.gather(*[fetch_color(cf) for cf in color_folders])
+        numeric_folders = [cf for cf in color_folders if cf.isdigit()]
+
+        async def fetch_colores_names():
+            if not numeric_folders:
+                return []
+            return await sb(client, "GET", "/rest/v1/inventario_colores",
+                            params={"select": "id,color", "id": f"in.({','.join(numeric_folders)})"})
+
+        *pairs, colores_rows = await asyncio.gather(
+            *[fetch_color(cf) for cf in color_folders],
+            fetch_colores_names(),
+        )
 
     result = {cf: val for cf, val in pairs}
+    # Add color-name aliases for numeric folders so frontend can match without color_id
+    for row in (colores_rows or []):
+        num_key = str(row["id"])
+        name_key = (row.get("color") or "").upper().strip().replace(" ", "_").replace("/", "_")
+        if num_key in result and name_key:
+            result[name_key] = result[num_key]
+
     cache_set(cache_key, result)
     return result
 
