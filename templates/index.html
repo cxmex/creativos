@@ -136,16 +136,22 @@ function swatchColor(name) {
 }
 
 async function load() {
-  // Fetch estilos + thumbs in parallel
-  const [estilosData, thumbsData] = await Promise.all([
-    fetch(`/api/estilos?sort=${currentSort}`).then(r => r.json()),
-    fetch('/api/thumbs').then(r => r.json()).catch(() => ({})),
-  ]);
-  allEstilos = estilosData;
-  thumbs = thumbsData;
+  // Load estilos first — render immediately without waiting for thumbs
+  allEstilos = await fetch(`/api/estilos?sort=${currentSort}`).then(r => r.json());
   document.getElementById('loading').style.display = 'none';
   updateStats();
   filterEstilos();
+
+  // Load thumbs in background — inject into already-rendered cards
+  fetch('/api/thumbs').then(r => r.json()).then(data => {
+    thumbs = data;
+    Object.entries(thumbs).forEach(([id, url]) => {
+      const img = document.querySelector(`#card-${id} .estilo-thumb`);
+      if (img) { img.src = url; img.style.display = ''; }
+      const ph = document.querySelector(`#card-${id} .estilo-thumb-placeholder`);
+      if (ph) ph.style.display = 'none';
+    });
+  }).catch(() => {});
 }
 
 async function loadVentas() {
@@ -215,10 +221,8 @@ function render(rows) {
 
   document.getElementById('list').innerHTML = rows.map((e, idx) => {
     const imgUrl = thumbs[String(e.id)];
-    const imgEl = imgUrl
-      ? `<img class="estilo-thumb" src="${imgUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-      : '';
-    const placeholder = `<div class="estilo-thumb-placeholder" ${imgUrl ? 'style="display:none"' : ''}>&#9749;</div>`;
+    const imgEl = `<img class="estilo-thumb" src="${imgUrl || ''}" alt="" loading="lazy" style="${imgUrl ? '' : 'display:none'}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
+    const placeholder = `<div class="estilo-thumb-placeholder" style="${imgUrl ? 'display:none' : ''}">&#9749;</div>`;
     const rankLabel = currentSort === 'ventas'
       ? `<span class="ventas-badge">${(ventasMap[e.id] || 0)} vtas</span>`
       : '';
