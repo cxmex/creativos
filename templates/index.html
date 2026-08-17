@@ -51,16 +51,18 @@ body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif;
 /* Color tree */
 .color-tree { border-top: 1px solid #1a1a35; background: #0d1526; display: none; }
 .expanded .color-tree { display: block; }
-.color-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 24px; border-bottom: 1px solid #12121f; transition: background .1s; }
+.color-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 16px; border-bottom: 1px solid #12121f; transition: background .1s; }
 .color-row:last-child { border-bottom: none; }
 .color-row:hover { background: #16213E44; }
-.color-swatch { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.1); }
-.color-name { flex: 1; font-size: .78rem; color: #ccc; }
-.color-stocks { display: flex; gap: 16px; align-items: center; }
-.color-stock-item { text-align: right; min-width: 36px; }
+.color-photo { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid #2a3a5e; background: #1a1a35; }
+.color-photo-ph { width: 52px; height: 52px; border-radius: 6px; background: #1a1a35; border: 1px solid #1e2a4a; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.color-swatch { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.1); }
+.color-name { flex: 1; font-size: .78rem; color: #ccc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.color-stocks { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
+.color-stock-item { text-align: right; min-width: 34px; }
 .color-stock-val { font-size: .85rem; font-weight: 700; }
 .color-stock-lbl { font-size: .58rem; color: #555; text-transform: uppercase; }
-.color-bar-wrap { width: 80px; height: 4px; background: #1a1a35; border-radius: 2px; overflow: hidden; }
+.color-bar-wrap { width: 60px; height: 4px; background: #1a1a35; border-radius: 2px; overflow: hidden; }
 .color-bar { height: 100%; border-radius: 2px; background: #7C4DFF; }
 
 /* Rank badge */
@@ -234,8 +236,12 @@ function render(rows) {
     const colorRows = e.colors.map(c => {
       const barPct = e.total > 0 ? Math.round((c.total / e.total) * 100) : 0;
       const swatch = swatchColor(c.color);
+      const cid = c.color_id;
+      const photoId = `cph-${e.id}-${cid || c.color.replace(/\s+/g,'-')}`;
       return `<div class="color-row">
-        <div class="color-swatch" style="background:${swatch}"></div>
+        <div class="color-photo-ph" id="${photoId}">
+          <div class="color-swatch" style="background:${swatch}"></div>
+        </div>
         <div class="color-name">${c.color}</div>
         <div class="color-bar-wrap"><div class="color-bar" style="width:${barPct}%"></div></div>
         <div class="color-stocks">
@@ -285,9 +291,32 @@ function render(rows) {
   }).join('');
 }
 
+const loadedColorImages = new Set();
+
 function toggle(id) {
   const card = document.getElementById(`card-${id}`);
+  const wasExpanded = card.classList.contains('expanded');
   card.classList.toggle('expanded');
+
+  // Load color images the first time this estilo is expanded
+  if (!wasExpanded && !loadedColorImages.has(id)) {
+    loadedColorImages.add(id);
+    fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorMap => {
+      // colorMap: { "color_id_str": "url", ... }
+      // Find the estilo in allEstilos to match color_id
+      const estilo = allEstilos.find(e => e.id === id);
+      if (!estilo) return;
+      estilo.colors.forEach(c => {
+        if (!c.color_id) return;
+        const url = colorMap[String(c.color_id)];
+        if (!url) return;
+        const phId = `cph-${id}-${c.color_id}`;
+        const ph = document.getElementById(phId);
+        if (!ph) return;
+        ph.innerHTML = `<img class="color-photo" src="${url}" alt="${c.color}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=color-swatch style=background:${swatchColor(c.color).replace(/'/g,'"')}></div>'">`;
+      });
+    }).catch(() => {});
+  }
 }
 
 load();
