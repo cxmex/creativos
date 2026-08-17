@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict
 import httpx
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -241,15 +241,25 @@ async def _storage_upload(bucket: str, path: str, content: bytes, content_type: 
     return r
 
 
-@app.post("/api/upload/color/{estilo_id}/{color_id}")
-async def upload_color_photo(estilo_id: int, color_id: int, file: UploadFile = File(...)):
+@app.post("/api/upload/color/{estilo_id}")
+async def upload_color_photo(
+    estilo_id: int,
+    color_name: str = Form(...),
+    color_id: int = Form(None),
+    file: UploadFile = File(...),
+):
     content = await file.read()
-    path = f"{estilo_id}/{color_id}/{file.filename}"
+    # Prefer numeric color_id as folder; fall back to sanitized color name
+    if color_id:
+        folder = str(color_id)
+    else:
+        folder = color_name.upper().strip().replace(" ", "_").replace("/", "_")
+    path = f"{estilo_id}/{folder}/{file.filename}"
     r = await _storage_upload("images-colores", path, content, file.content_type or "image/jpeg")
     if r.status_code not in (200, 201):
         return {"error": r.text, "status": r.status_code}
     _cache.pop(f"colores_{estilo_id}", None)
-    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images-colores/{path}"}
+    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images-colores/{path}", "folder": folder}
 
 
 @app.post("/api/upload/estilo/{estilo_id}")

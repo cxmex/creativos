@@ -350,17 +350,21 @@ function toggle(id) {
   if (!wasExpanded && !loadedColorImages.has(id)) {
     loadedColorImages.add(id);
     fetch(`/api/color-images/${id}`).then(r => r.json()).then(colorMap => {
-      // colorMap: { "color_id_string": "url" }
+      // colorMap: { "folder_name": "url" } — folder_name is color_id string OR sanitized color name
       const estilo = allEstilos.find(e => e.id === id);
       if (!estilo) return;
       estilo.colors.forEach(c => {
-        if (!c.color_id) return;
-        const url = colorMap[String(c.color_id)];
+        // Try color_id match first, then sanitized color name
+        const sanitized = _sanitizeColorFolder(c.color);
+        const url = (c.color_id && colorMap[String(c.color_id)])
+          || colorMap[sanitized]
+          || colorMap[c.color.toUpperCase()];
         if (!url) return;
-        const phId = `cph-${id}-${c.color_id}`;
+        const phId = c.color_id
+          ? `cph-${id}-${c.color_id}`
+          : `cph-${id}-${c.color.replace(/\s+/g,'-')}`;
         const ph = document.getElementById(phId);
         if (!ph) return;
-        const colorLabel = c.color.replace(/'/g, "\\'");
         ph.innerHTML = `<img src="${url}" alt="${c.color}" loading="lazy" onclick="event.stopPropagation();openLightbox('${url}')" onerror="this.parentElement.innerHTML='<div class=color-swatch style=background:${swatchColor(c.color).replace(/'/g,'"')}></div>'">`;
       });
     }).catch(() => {});
@@ -368,18 +372,22 @@ function toggle(id) {
 }
 
 /* ---- Upload ---- */
-let _uploadCtx = null; // { estiloId, colorId, photoId }
+let _uploadCtx = null;
+
+function _sanitizeColorFolder(name) {
+  return name.toUpperCase().trim().replace(/\s+/g,'_').replace(/\//g,'_');
+}
 
 function openUpload(evt, estiloId, colorId, colorName, estiloNombre) {
   evt.stopPropagation();
-  _uploadCtx = { estiloId, colorId, colorName, estiloNombre,
-    photoId: colorId ? `cph-${estiloId}-${colorId}` : null };
-  document.getElementById('modal-title').textContent =
-    colorId ? `Subir foto de color` : `Color sin ID — no se puede subir`;
-  document.getElementById('modal-sub').textContent =
-    colorId ? `${estiloNombre} · ${colorName}` : `Asigna un color_id en Supabase a este color primero`;
-  document.getElementById('upload-input').disabled = !colorId;
-  document.getElementById('do-upload-btn').disabled = !colorId;
+  const photoId = colorId
+    ? `cph-${estiloId}-${colorId}`
+    : `cph-${estiloId}-${colorName.replace(/\s+/g,'-')}`;
+  _uploadCtx = { estiloId, colorId, colorName, estiloNombre, photoId, isEstilo: false };
+  document.getElementById('modal-title').textContent = 'Subir foto de color';
+  document.getElementById('modal-sub').textContent = `${estiloNombre} · ${colorName}`;
+  document.getElementById('upload-input').disabled = false;
+  document.getElementById('do-upload-btn').disabled = false;
   document.getElementById('upload-preview').innerHTML = '';
   document.getElementById('upload-status').textContent = '';
   document.getElementById('upload-filename').textContent = '';
@@ -432,10 +440,15 @@ async function doUpload() {
   const fd = new FormData();
   fd.append('file', inp.files[0]);
 
-  const { estiloId, colorId, photoId, isEstilo } = _uploadCtx;
-  const endpoint = isEstilo
-    ? `/api/upload/estilo/${estiloId}`
-    : `/api/upload/color/${estiloId}/${colorId}`;
+  const { estiloId, colorId, colorName, photoId, isEstilo } = _uploadCtx;
+  let endpoint;
+  if (isEstilo) {
+    endpoint = `/api/upload/estilo/${estiloId}`;
+  } else {
+    fd.append('color_name', colorName);
+    if (colorId) fd.append('color_id', colorId);
+    endpoint = `/api/upload/color/${estiloId}`;
+  }
 
   try {
     const res = await fetch(endpoint, { method: 'POST', body: fd });
