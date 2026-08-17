@@ -188,11 +188,14 @@ async def api_color_images(estilo_id: int):
         color_folders = [x["name"] for x in (r.json() if r.status_code == 200 else []) if x.get("name")]
 
         async def fetch_color(cf):
-            creativos, fotos = await asyncio.gather(
+            creativos, fotos, direct = await asyncio.gather(
                 _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/creativos/"),
                 _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/fotos/"),
+                _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/"),
             )
-            return cf, {"creativos": creativos, "fotos": fotos}
+            # direct = files stored at root of color folder (pre-tipo uploads or manual)
+            all_fotos = fotos + [u for u in direct if u not in fotos]
+            return cf, {"creativos": creativos, "fotos": all_fotos}
 
         pairs = await asyncio.gather(*[fetch_color(cf) for cf in color_folders])
 
@@ -294,6 +297,17 @@ async def upload_estilo_photo(estilo_id: int, file: UploadFile = File(...)):
         return {"error": r.text, "status": r.status_code}
     _cache.pop("thumbs", None)
     return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images_estilos/{path}"}
+
+
+@app.get("/api/debug/bucket")
+async def debug_bucket(prefix: str = ""):
+    """List raw bucket contents at any prefix — for debugging."""
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/storage/v1/object/list/images-colores",
+            headers=HEADERS, json={"prefix": prefix, "limit": 200}, timeout=15
+        )
+        return {"status": r.status_code, "prefix": prefix, "items": r.json()}
 
 
 @app.post("/api/cache/clear")
