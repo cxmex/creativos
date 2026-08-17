@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -224,6 +224,43 @@ async def api_ventas_por_estilo(dias: int = 30):
     data = result if isinstance(result, dict) else {}
     cache_set(key, data)
     return data
+
+
+async def _storage_upload(bucket: str, path: str, content: bytes, content_type: str):
+    upload_headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": content_type,
+        "x-upsert": "true",
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/storage/v1/object/{bucket}/{path}",
+            headers=upload_headers, content=content, timeout=60,
+        )
+    return r
+
+
+@app.post("/api/upload/color/{estilo_id}/{color_id}")
+async def upload_color_photo(estilo_id: int, color_id: int, file: UploadFile = File(...)):
+    content = await file.read()
+    path = f"{estilo_id}/{color_id}/{file.filename}"
+    r = await _storage_upload("images-colores", path, content, file.content_type or "image/jpeg")
+    if r.status_code not in (200, 201):
+        return {"error": r.text, "status": r.status_code}
+    _cache.pop(f"colores_{estilo_id}", None)
+    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images-colores/{path}"}
+
+
+@app.post("/api/upload/estilo/{estilo_id}")
+async def upload_estilo_photo(estilo_id: int, file: UploadFile = File(...)):
+    content = await file.read()
+    path = f"{estilo_id}/{file.filename}"
+    r = await _storage_upload("images_estilos", path, content, file.content_type or "image/jpeg")
+    if r.status_code not in (200, 201):
+        return {"error": r.text, "status": r.status_code}
+    _cache.pop("thumbs", None)
+    return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images_estilos/{path}"}
 
 
 @app.post("/api/cache/clear")
