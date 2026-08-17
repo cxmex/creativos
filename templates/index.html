@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creativos — Fundastock</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0F0F23; color: #fff; font-family: -apple-system, sans-serif; min-height: 100vh; }
+
+/* Header */
+.header { background: #16213E; padding: 14px 20px; border-bottom: 1px solid #1e2a4a; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.header-title { font-size: 1.05rem; font-weight: 800; letter-spacing: .02em; }
+.badge { background: #7C4DFF; color: #fff; font-size: .68rem; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.search-wrap { flex: 1; min-width: 180px; max-width: 320px; }
+.search-wrap input { width: 100%; background: #0d1526; border: 1px solid #2a3a5e; border-radius: 8px; padding: 7px 12px; color: #fff; font-size: .85rem; outline: none; }
+.search-wrap input::placeholder { color: #555; }
+.search-wrap input:focus { border-color: #7C4DFF; }
+
+/* Sort bar */
+.sort-bar { background: #0d1526; padding: 10px 20px; border-bottom: 1px solid #1a1a35; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sort-label { font-size: .68rem; color: #555; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.toggle { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid #2a3a5e; }
+.tbtn { background: #16213E; color: #666; border: none; padding: 6px 13px; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: .12s; }
+.tbtn.active { background: #7C4DFF; color: #fff; }
+.tbtn.active-green { background: #00C853; color: #0F0F23; }
+.spacer { flex: 1; }
+.stats-bar { font-size: .75rem; color: #555; }
+.stats-bar strong { color: #888; }
+
+/* Main */
+.main { padding: 16px 20px; }
+
+/* Estilo card */
+.estilo-card { background: #16213E; border: 1px solid #1e2a4a; border-radius: 12px; margin-bottom: 10px; overflow: hidden; transition: border-color .15s; }
+.estilo-card:hover { border-color: #2a3a5e; }
+.estilo-card.expanded { border-color: #7C4DFF44; }
+.estilo-header { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; user-select: none; }
+.estilo-thumb { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; background: #0d1526; flex-shrink: 0; border: 1px solid #2a3a5e; }
+.estilo-thumb-placeholder { width: 64px; height: 64px; border-radius: 8px; background: #0d1526; border: 1px solid #1e2a4a; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #2a3a5e; }
+.estilo-info { flex: 1; min-width: 0; }
+.estilo-name { font-size: .88rem; font-weight: 800; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.estilo-sub { font-size: .7rem; color: #555; margin-top: 3px; }
+.estilo-stocks { display: flex; gap: 10px; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.stock-chip { text-align: center; min-width: 44px; }
+.stock-chip-val { font-size: 1.05rem; font-weight: 800; line-height: 1; }
+.stock-chip-lbl { font-size: .6rem; color: #555; text-transform: uppercase; margin-top: 2px; }
+.expand-icon { color: #555; font-size: .85rem; margin-left: 6px; transition: transform .2s; flex-shrink: 0; }
+.expanded .expand-icon { transform: rotate(180deg); color: #7C4DFF; }
+
+/* Color tree */
+.color-tree { border-top: 1px solid #1a1a35; background: #0d1526; display: none; }
+.expanded .color-tree { display: block; }
+.color-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 24px; border-bottom: 1px solid #12121f; transition: background .1s; }
+.color-row:last-child { border-bottom: none; }
+.color-row:hover { background: #16213E44; }
+.color-swatch { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.1); }
+.color-name { flex: 1; font-size: .78rem; color: #ccc; }
+.color-stocks { display: flex; gap: 16px; align-items: center; }
+.color-stock-item { text-align: right; min-width: 36px; }
+.color-stock-val { font-size: .85rem; font-weight: 700; }
+.color-stock-lbl { font-size: .58rem; color: #555; text-transform: uppercase; }
+.color-bar-wrap { width: 80px; height: 4px; background: #1a1a35; border-radius: 2px; overflow: hidden; }
+.color-bar { height: 100%; border-radius: 2px; background: #7C4DFF; }
+
+/* Rank badge */
+.rank-badge { font-size: .65rem; color: #555; font-weight: 700; min-width: 28px; text-align: right; }
+
+/* Loading / empty */
+#loading { text-align: center; padding: 60px; color: #7C4DFF; font-size: .9rem; }
+#empty { text-align: center; padding: 60px; color: #555; font-size: .9rem; display: none; }
+
+/* Ventas mode badge */
+.ventas-badge { display: inline-block; background: #00C853; color: #0F0F23; font-size: .62rem; padding: 1px 6px; border-radius: 6px; font-weight: 800; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Creativos</div>
+  <span class="badge">Fundastock</span>
+  <div class="search-wrap">
+    <input type="text" id="search" placeholder="Buscar estilo..." oninput="filterEstilos()">
+  </div>
+</div>
+
+<div class="sort-bar">
+  <span class="sort-label">Ordenar</span>
+  <div class="toggle">
+    <button class="tbtn active" id="s-nombre" onclick="setSort('nombre')">A-Z</button>
+    <button class="tbtn" id="s-stock_total" onclick="setSort('stock_total')">Stock Total</button>
+    <button class="tbtn" id="s-stock_t1" onclick="setSort('stock_t1')">T1</button>
+    <button class="tbtn" id="s-stock_t2" onclick="setSort('stock_t2')">T2</button>
+    <button class="tbtn" id="s-colores" onclick="setSort('colores')">+ Colores</button>
+    <button class="tbtn" id="s-ventas" onclick="setSort('ventas')">Ventas 30d</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="stats-bar" id="stats-bar"></div>
+</div>
+
+<div class="main">
+  <div id="loading">Cargando estilos...</div>
+  <div id="empty">Sin resultados</div>
+  <div id="list"></div>
+</div>
+
+<script>
+let allEstilos = [];
+let thumbs = {};
+let ventasMap = {};
+let currentSort = 'nombre';
+let ventasLoaded = false;
+
+const COLOR_HEX = {
+  'NEGRO': '#222', 'BLANCO': '#f5f5f5', 'NARANJA': '#FF6B00',
+  'ROJO': '#e53935', 'AZUL': '#1565C0', 'VERDE': '#00C853',
+  'ROSA': '#E91E63', 'MORADO': '#7C4DFF', 'AMARILLO': '#FFD600',
+  'CAFE': '#6D4C41', 'GRIS': '#607D8B', 'DORADO': '#FFD700',
+  'PLATEADO': '#9E9E9E', 'CELESTE': '#29B6F6', 'TURQUESA': '#00BCD4',
+  'LILA': '#CE93D8', 'BEIGE': '#EFEBE9', 'GUINDA': '#880E4F',
+  'HUMO': '#78909C', 'TRANSPARENTE': 'rgba(200,200,255,0.15)',
+  'VERDE MILITAR': '#558B2F', 'AZUL MARINO': '#0D47A1',
+  'ROSA MEXICANO': '#E91E63', 'SALMON': '#FF8A65', 'COBRE': '#BF360C',
+  'SIN COLOR': '#2a2a2a',
+};
+
+function swatchColor(name) {
+  const upper = name.toUpperCase();
+  // Try exact match first
+  if (COLOR_HEX[upper]) return COLOR_HEX[upper];
+  // Try partial match
+  for (const [key, val] of Object.entries(COLOR_HEX)) {
+    if (upper.includes(key)) return val;
+  }
+  return '#333';
+}
+
+async function load() {
+  // Fetch estilos + thumbs in parallel
+  const [estilosData, thumbsData] = await Promise.all([
+    fetch(`/api/estilos?sort=${currentSort}`).then(r => r.json()),
+    fetch('/api/thumbs').then(r => r.json()).catch(() => ({})),
+  ]);
+  allEstilos = estilosData;
+  thumbs = thumbsData;
+  document.getElementById('loading').style.display = 'none';
+  updateStats();
+  filterEstilos();
+}
+
+async function loadVentas() {
+  if (ventasLoaded) return;
+  document.getElementById('s-ventas').textContent = '...';
+  try {
+    ventasMap = await fetch('/api/ventas-por-estilo?dias=30').then(r => r.json());
+    ventasLoaded = true;
+    document.getElementById('s-ventas').textContent = 'Ventas 30d';
+  } catch(e) {
+    document.getElementById('s-ventas').textContent = 'Ventas 30d';
+  }
+}
+
+function sortedEstilos(rows) {
+  if (currentSort === 'ventas') {
+    return [...rows].sort((a, b) => (ventasMap[b.id] || 0) - (ventasMap[a.id] || 0));
+  }
+  return rows; // already sorted by server for other sorts
+}
+
+function setSort(s) {
+  currentSort = s;
+  Object.keys({ nombre:1, stock_total:1, stock_t1:1, stock_t2:1, colores:1, ventas:1 })
+    .forEach(k => {
+      const el = document.getElementById(`s-${k}`);
+      if (el) el.classList.remove('active', 'active-green');
+    });
+  const btn = document.getElementById(`s-${s}`);
+  if (btn) btn.classList.add(s === 'ventas' ? 'active-green' : 'active');
+
+  if (s === 'ventas') {
+    loadVentas().then(() => filterEstilos());
+  } else {
+    fetch(`/api/estilos?sort=${s}`).then(r => r.json()).then(data => {
+      allEstilos = data;
+      filterEstilos();
+    });
+  }
+}
+
+function filterEstilos() {
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  let rows = allEstilos.filter(e => !q || e.nombre.toLowerCase().includes(q));
+  rows = sortedEstilos(rows);
+  updateStats(rows);
+  render(rows);
+}
+
+function updateStats(rows) {
+  const data = rows || allEstilos;
+  const totalEstilos = data.length;
+  const totalStock = data.reduce((s, e) => s + e.total, 0);
+  document.getElementById('stats-bar').innerHTML =
+    `<strong>${totalEstilos}</strong> estilos · <strong>${totalStock.toLocaleString()}</strong> piezas`;
+}
+
+function render(rows) {
+  if (!rows.length) {
+    document.getElementById('empty').style.display = '';
+    document.getElementById('list').innerHTML = '';
+    return;
+  }
+  document.getElementById('empty').style.display = 'none';
+
+  const maxTotal = Math.max(...rows.map(e => e.total), 1);
+
+  document.getElementById('list').innerHTML = rows.map((e, idx) => {
+    const imgUrl = thumbs[String(e.id)];
+    const imgEl = imgUrl
+      ? `<img class="estilo-thumb" src="${imgUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const placeholder = `<div class="estilo-thumb-placeholder" ${imgUrl ? 'style="display:none"' : ''}>&#9749;</div>`;
+    const rankLabel = currentSort === 'ventas'
+      ? `<span class="ventas-badge">${(ventasMap[e.id] || 0)} vtas</span>`
+      : '';
+
+    const t1Color = e.t1 > 0 ? '#00C853' : '#333';
+    const t2Color = e.t2 > 0 ? '#7C4DFF' : '#333';
+    const totalColor = e.total > 0 ? '#fff' : '#333';
+
+    const colorRows = e.colors.map(c => {
+      const barPct = e.total > 0 ? Math.round((c.total / e.total) * 100) : 0;
+      const swatch = swatchColor(c.color);
+      return `<div class="color-row">
+        <div class="color-swatch" style="background:${swatch}"></div>
+        <div class="color-name">${c.color}</div>
+        <div class="color-bar-wrap"><div class="color-bar" style="width:${barPct}%"></div></div>
+        <div class="color-stocks">
+          <div class="color-stock-item">
+            <div class="color-stock-val" style="color:#00C853">${c.t1}</div>
+            <div class="color-stock-lbl">T1</div>
+          </div>
+          <div class="color-stock-item">
+            <div class="color-stock-val" style="color:#7C4DFF">${c.t2}</div>
+            <div class="color-stock-lbl">T2</div>
+          </div>
+          <div class="color-stock-item">
+            <div class="color-stock-val" style="color:#fff">${c.total}</div>
+            <div class="color-stock-lbl">Total</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="estilo-card" id="card-${e.id}">
+      <div class="estilo-header" onclick="toggle(${e.id})">
+        ${imgEl}${placeholder}
+        <div class="estilo-info">
+          <div class="estilo-name">${e.nombre}${rankLabel}</div>
+          <div class="estilo-sub">${e.num_colors} color${e.num_colors !== 1 ? 'es' : ''} · ${e.proveedor || ''}</div>
+        </div>
+        <div class="estilo-stocks">
+          <div class="stock-chip">
+            <div class="stock-chip-val" style="color:${t1Color}">${e.t1}</div>
+            <div class="stock-chip-lbl">T1</div>
+          </div>
+          <div class="stock-chip">
+            <div class="stock-chip-val" style="color:${t2Color}">${e.t2}</div>
+            <div class="stock-chip-lbl">T2</div>
+          </div>
+          <div class="stock-chip">
+            <div class="stock-chip-val" style="color:${totalColor}">${e.total}</div>
+            <div class="stock-chip-lbl">Total</div>
+          </div>
+        </div>
+        <div class="expand-icon">&#9660;</div>
+      </div>
+      <div class="color-tree">
+        ${colorRows || '<div style="padding:12px 24px;color:#555;font-size:.78rem">Sin stock en sistema</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggle(id) {
+  const card = document.getElementById(`card-${id}`);
+  card.classList.toggle('expanded');
+}
+
+load();
+</script>
+</body>
+</html>
