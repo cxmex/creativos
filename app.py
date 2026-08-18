@@ -317,6 +317,21 @@ async def upload_estilo_photo(estilo_id: int, file: UploadFile = File(...)):
     return {"ok": True, "url": f"{SUPABASE_URL}/storage/v1/object/public/images_estilos/{path}"}
 
 
+@app.get("/api/debug/color-fetch/{estilo_id}")
+async def debug_color_fetch(estilo_id: int, cf: str = "NEGRO"):
+    """Trace exactly what fetch_color returns for a given folder."""
+    async with httpx.AsyncClient() as client:
+        creativos, fotos, direct = await asyncio.gather(
+            _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/creativos/"),
+            _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/fotos/"),
+            _list_all_files(client, "images-colores", f"{estilo_id}/{cf}/"),
+        )
+    all_fotos = fotos + [u for u in direct if u not in fotos]
+    return {"cf": cf, "creativos_count": len(creativos), "fotos_count": len(fotos),
+            "direct_count": len(direct), "all_fotos_count": len(all_fotos),
+            "creativos": creativos, "direct": direct, "fotos": fotos}
+
+
 @app.get("/api/debug/colores")
 async def debug_colores(ids: str = "1,4,5,17"):
     async with httpx.AsyncClient() as client:
