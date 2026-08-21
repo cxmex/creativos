@@ -353,6 +353,42 @@ async def debug_bucket(prefix: str = ""):
         return {"status": r.status_code, "prefix": prefix, "items": r.json()}
 
 
+@app.get("/api/creativos-count")
+async def api_creativos_count():
+    """Count creativos images per estilo across all colors."""
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/storage/v1/object/list/images-colores",
+            headers=HEADERS, json={"prefix": "", "limit": 500}, timeout=15
+        )
+        estilo_folders = [x["name"] for x in (r.json() if r.status_code == 200 else []) if x.get("name") and x["name"].isdigit()]
+
+        async def count_estilo(eid):
+            cr = await client.post(
+                f"{SUPABASE_URL}/storage/v1/object/list/images-colores",
+                headers=HEADERS, json={"prefix": f"{eid}/", "limit": 100}, timeout=10
+            )
+            color_folders = [x["name"] for x in (cr.json() if cr.status_code == 200 else []) if x.get("name")]
+
+            async def count_creativos(cf):
+                res = await client.post(
+                    f"{SUPABASE_URL}/storage/v1/object/list/images-colores",
+                    headers=HEADERS, json={"prefix": f"{eid}/{cf}/creativos/", "limit": 200}, timeout=10
+                )
+                items = res.json() if res.status_code == 200 else []
+                return sum(1 for x in items if x.get("id"))
+
+            counts = await asyncio.gather(*[count_creativos(cf) for cf in color_folders])
+            return eid, sum(counts)
+
+        results = await asyncio.gather(*[count_estilo(eid) for eid in estilo_folders])
+
+    data = {eid: cnt for eid, cnt in results if cnt > 0}
+    data["_total_estilos_with_creativos"] = len(data)
+    data["_total_creativos"] = sum(v for k, v in data.items() if not k.startswith("_"))
+    return data
+
+
 @app.post("/api/cache/clear")
 async def clear_cache():
     _cache.clear()
